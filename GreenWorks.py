@@ -1,17 +1,34 @@
 # GreenWorks-Core/Main.py
+from dataclasses import dataclass
+from zoneinfo import ZoneInfo
+from datetime import datetime
 import requests
-from Objects import login_object, user_info_object, mower_info_object
+import json
+from Records import Login_object, Mower_operating_status, User_info_object, Mower_properties
+from Enums import MowerState 
+@dataclass
+class Mower:
+    id: int
+    name: str
+    sn: str
+    is_online: bool
+    properties: Mower_properties
+    operating_status: Mower_operating_status
 
 class GreenWorks:
     """Greenworks - API Wrapper for Greenworks robotic lawn mower."""
     base_url = "https://xapi.globetools.systems/v2"
+    Mowers: list[Mower]
+    UserTimezone: ZoneInfo = ZoneInfo("Europe/Copenhagen")
+
     def __init__(self, email: str, password: str):
         """Initialize the GreenWorks class with user credentials."""
         self.login_info = self.login_user(email, password)
-        self.user_info = self.get_user_info(self.login_info.user_id, self.login_info.access_token)
+        self.user_info = self.get_user_info(self.login_info.user_id)
         
         ## Get devices associated with the user
-        self.devices = self.get_devices(self.user_info.id, self.login_info.access_token)
+        self.Mowers = []
+        self.update_devices(self.user_info.id)
     
     def login_user(self, email: str, password: str):
         url = f"{self.base_url}/user_auth"
@@ -35,7 +52,7 @@ class GreenWorks:
             if "user_id" not in data or "access_token" not in data:
                 raise ValueError("Login-svar mangler nødvendige felter: 'user_id' og/eller 'access_token'")
 
-            return login_object(**data)
+            return Login_object(**data)
 
         except requests.exceptions.RequestException as e:
             raise RuntimeError(f"Login fejlede: netværksfejl ved {url}: {e} : {response.json()}") from e
@@ -46,10 +63,10 @@ class GreenWorks:
         except TypeError as e:
             raise RuntimeError(f"Login fejlede: fejl ved oprettelse af login_object: {e}\nData: {data}") from e
 
-    def get_user_info(self, user_id: int, access_token: str):
+    def get_user_info(self, user_id: int):
         url = f"{self.base_url}/user/{user_id}"
         headers = {
-            "Access-Token": access_token
+            "Access-Token": self.login_info.access_token
         }
 
         try:
@@ -62,7 +79,7 @@ class GreenWorks:
             if "id" not in data:
                 raise ValueError("Brugerdata mangler 'id' felt")
 
-            return user_info_object(**data)
+            return User_info_object(**data)
 
         except requests.exceptions.RequestException as e:
             raise RuntimeError(f"Fejl under API-kald til {url}: {e}") from e
@@ -72,12 +89,47 @@ class GreenWorks:
 
         except TypeError as e:
             raise RuntimeError(f"Fejl ved oprettelse af user_info_object: {e}") from e
+        
 
-    def get_devices(self, user_id: int, access_token: str):
 
+    def get_mower_operating_status(self, product_id: int, mower_id: int):
+        """
+        Placeholder for a method to update mower information.
+        This method should implement the logic to update mower details.
+        """
+        url = f"https://xapi.globetools.systems/v2/product/{product_id}/v_device/{mower_id}?datapoints=32"
+        headers = {
+            "Access-Token": self.login_info.access_token
+        }
+        try:
+            response = requests.get(url, headers=headers, timeout=10)
+            response.raise_for_status()  # Stopper ved 4xx/5xx
+
+
+            # Feltet "32" er en streng med JSON-indhold
+            raw_32 = response.json().get("32", "{}")
+            parsed_32 = json.loads(raw_32)
+            data = parsed_32.get("request", {})
+
+            return Mower_operating_status(
+                battery_status=data.get("battery_status", -1),
+                mower_main_state=MowerState(data.get("mower_main_state", -1)),
+                next_start=datetime.fromtimestamp(data.get("next_start", ""), tz=self.UserTimezone),
+                request_time=datetime.fromisoformat(data.get("request_time", "").replace("Z", "+00:00")).astimezone(self.UserTimezone)
+            )
+
+        except ValueError as e:
+            raise RuntimeError(f"Ugyldigt JSON-svar fra {url}: {e}") from e
+        except TypeError as e:
+            raise RuntimeError(f"Fejl ved oprettelse af mower_info_object: {e}") from e
+        except requests.exceptions.RequestException as e:
+            raise RuntimeError(f"Fejl under API-kald til {url}: {e}") from e
+
+    def update_devices(self, user_id: int):
+        self.Mowers = []  # Tøm listen før opdatering
         url = f"{self.base_url}/user/{user_id}/subscribe/devices?version=0"
         headers = {
-            "Access-Token": access_token
+            "Access-Token": self.login_info.access_token
         }
 
         try:
@@ -90,8 +142,26 @@ class GreenWorks:
             devices = data.get("list")
             if not isinstance(devices, list):
                 raise ValueError("JSON-svar indeholder ikke en gyldig 'list' af enheder")
-
-            return [mower_info_object(**device) for device in devices]
+            
+            # Returner en liste af Mower objekter
+            for device in devices:
+                mower_properties = self.get_device_properties(device.get("product_id"), device.get("id"))
+                if mower_properties is None:
+                    raise ValueError(f"Kunne ikke hente egenskaber for enhed med ID {device.get('id')}")
+                mower_operating_status = self.get_mower_operating_status(device.get("product_id"), device.get("id"))
+                if mower_operating_status is None:
+                    raise ValueError(f"Kunne ikke hente tilstand for enhed med ID {device.get('id')}")
+                # Opret Mower objekt med de hentede data
+                mower = Mower(
+                    id=device.get("id"),
+                    name=device.get("name"),
+                    sn=device.get("sn"),
+                    is_online=device.get("is_online"),
+                    properties=mower_properties,
+                    operating_status=mower_operating_status
+                )
+                # Tilføj Mower objektet til listen
+                self.Mowers.append(mower)
 
         except requests.exceptions.RequestException as e:
             raise RuntimeError(f"Fejl under API-kald til {url}: {e}") from e
@@ -101,6 +171,27 @@ class GreenWorks:
 
         except TypeError as e:
             raise RuntimeError(f"Fejl ved oprettelse af mower_info_object: {e}") from e
+        
+
+    def get_device_properties(self, product_id: int, device_id: int):
+        """
+        Placeholder for a method to get device properties.
+        This method should implement the logic to retrieve device properties.
+        """
+        url = f"{self.base_url}/product/{product_id}/device/{device_id}/property"
+        headers = {
+            "Access-Token": self.login_info.access_token
+        }
+
+        try:
+            response = requests.get(url, headers=headers, timeout=10)
+            response.raise_for_status()  # Stopper ved 4xx/5xx
+            
+            data = response.json()
+            return Mower_properties(**data)  # Returner de hentede enhedsegenskaber
+
+        except requests.exceptions.RequestException as e:
+            raise RuntimeError(f"Fejl under API-kald til {url}: {e}") from e
 
     def refresh_access_token(self, access_token: str, refresh_token: str):
         """
