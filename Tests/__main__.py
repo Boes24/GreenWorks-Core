@@ -1,7 +1,7 @@
 import os
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from GreenWorks import GreenWorks
+from GreenWorks.GreenWorks import GreenWorks
 
 
 greenworks = GreenWorks(os.getenv("EMAIL"), os.getenv("PASSWORD")) # type: ignore
@@ -28,7 +28,6 @@ def test_update_devices():
         print(f"Device Battery Status: {device.operating_status.battery_status}")
         print(f"Device Main State: {device.operating_status.mower_main_state.name}")
         print(f"Next Start: {device.operating_status.next_start}")
-        print(f"Request Time: {device.operating_status.request_time}")
     
 
 test_update_devices()
