@@ -12,7 +12,6 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 license = "MIT"
-requires = 
 
 [project.urls]
 Documentation = "https://github.com/Boes24/GreenWorks-Core"
