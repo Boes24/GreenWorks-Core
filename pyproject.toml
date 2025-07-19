@@ -1,10 +1,10 @@
 [project]
-name = "example_package_YOUR_USERNAME_HERE"
+name = "GreenWorks"
 version = "0.0.1"
 authors = [
-  { name="Example Author", email="author@example.com" },
+  { name="Christian Boes", email="boes9@icloud.com" },
 ]
-description = "A small example package"
+description = "An API wrapper for the Greenworks robotic lawn mower"
 readme = "README.md"
 requires-python = ">=3.9"
 classifiers = [
@@ -12,7 +12,8 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 license = "MIT"
+requires = 
 
 [project.urls]
-Homepage = "https://github.com/pypa/sampleproject"
-Issues = "https://github.com/pypa/sampleproject/issues"
+Documentation = "https://github.com/Boes24/GreenWorks-Core"
+Issues = "https://github.com/Boes24/GreenWorks-Core/issues"
