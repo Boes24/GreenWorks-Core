@@ -18,18 +18,13 @@ class Mower:
 class GreenWorks:
     """Greenworks - API Wrapper for Greenworks robotic lawn mower."""
     base_url = "https://xapi.globetools.systems/v2"
-    Mowers: list[Mower]
-    UserTimezone: ZoneInfo = ZoneInfo("Europe/Copenhagen")
 
-    def __init__(self, email: str, password: str):
+    def __init__(self, email: str, password: str, timezone: str):
         """Initialize the GreenWorks class with user credentials."""
         self.login_info = self.login_user(email, password)
         self.user_info = self.get_user_info(self.login_info.user_id)
-        
-        ## Get devices associated with the user
-        self.Mowers = []
-        self.update_devices(self.user_info.id)
-    
+        self.UserTimezone = ZoneInfo(timezone)
+
     def login_user(self, email: str, password: str):
         url = f"{self.base_url}/user_auth"
         body = {
@@ -63,7 +58,7 @@ class GreenWorks:
         except TypeError as e:
             raise RuntimeError(f"Login fejlede: fejl ved oprettelse af login_object: {e}\nData: {data}") from e
 
-    def get_user_info(self, user_id: int):
+    def get_user_info(self, user_id: int) -> User_info_object:
         url = f"{self.base_url}/user/{user_id}"
         headers = {
             "Access-Token": self.login_info.access_token
@@ -92,7 +87,7 @@ class GreenWorks:
         
 
 
-    def get_mower_operating_status(self, product_id: int, mower_id: int):
+    def get_mower_operating_status(self, product_id: int, mower_id: int) -> Mower_operating_status:
         """
         Placeholder for a method to update mower information.
         This method should implement the logic to update mower details.
@@ -125,8 +120,8 @@ class GreenWorks:
         except requests.exceptions.RequestException as e:
             raise RuntimeError(f"Fejl under API-kald til {url}: {e}") from e
 
-    def update_devices(self, user_id: int):
-        self.Mowers = []  # Tøm listen før opdatering
+    def get_devices(self, user_id: int) -> list[Mower]:
+        Mowers = []  # Tøm listen før opdatering
         url = f"{self.base_url}/user/{user_id}/subscribe/devices?version=0"
         headers = {
             "Access-Token": self.login_info.access_token
@@ -161,7 +156,9 @@ class GreenWorks:
                     operating_status=mower_operating_status
                 )
                 # Tilføj Mower objektet til listen
-                self.Mowers.append(mower)
+                Mowers.append(mower)
+
+            return Mowers  # Returner listen af Mower objekter
 
         except requests.exceptions.RequestException as e:
             raise RuntimeError(f"Fejl under API-kald til {url}: {e}") from e
@@ -173,7 +170,7 @@ class GreenWorks:
             raise RuntimeError(f"Fejl ved oprettelse af mower_info_object: {e}") from e
         
 
-    def get_device_properties(self, product_id: int, device_id: int):
+    def get_device_properties(self, product_id: int, device_id: int) -> Mower_properties:
         """
         Placeholder for a method to get device properties.
         This method should implement the logic to retrieve device properties.
