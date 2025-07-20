@@ -5,7 +5,8 @@ from datetime import datetime
 import requests
 import json
 from Records import Login_object, Mower_operating_status, User_info_object, Mower_properties
-from Enums import MowerState 
+from Enums import MowerState
+
 @dataclass
 class Mower:
     id: int
@@ -40,6 +41,8 @@ class GreenWorks:
             # Send POST request to the API
             response = requests.post(url, json=body, timeout=10)
             
+            if response.status_code == 401:
+                raise UnauthorizedException('Wrong login')
             response.raise_for_status()  # Stopper ved 4xx/5xx
             data = response.json()
 
@@ -200,3 +203,5 @@ class GreenWorks:
         
         pass
 
+class UnauthorizedException(Exception):
+    pass
