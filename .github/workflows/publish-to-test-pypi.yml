@@ -37,7 +37,7 @@ jobs:
     - build
     runs-on: ubuntu-latest
     environment:
-      name: GreenWorks
+      name: GreenWorks_pypi
       url: https://pypi.org/p/GreenWorks
     permissions:
       id-token: write  # IMPORTANT: mandatory for trusted publishing
