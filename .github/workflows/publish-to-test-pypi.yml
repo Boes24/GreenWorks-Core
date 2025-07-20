@@ -58,7 +58,7 @@ jobs:
     runs-on: ubuntu-latest
 
     environment:
-      name: testpypi
+      name: GreenWorks_testpypi
       url: https://test.pypi.org/p/GreenWorks
 
     permissions:
