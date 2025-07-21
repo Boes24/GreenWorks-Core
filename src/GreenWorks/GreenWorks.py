@@ -205,3 +205,9 @@ class GreenWorks:
 
 class UnauthorizedException(Exception):
     pass
+
+class LastConfig:
+    def __init__(self, data):
+        self.name = data.get("name", "")
+        self.timestamp = data.get("timestamp")
+        self.sentio = Mower(data.get("id"),data.get("name"), data.get("sn"), data.get("is_online"), data.get("properties"), data.get("operating_status"))
