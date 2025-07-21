@@ -1,7 +1,7 @@
 import os
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from GreenWorks.GreenWorks import GreenWorks
+from GreenWorksAPI.GreenWorksAPI import GreenWorks
 
 
 greenworks = GreenWorks(os.getenv("EMAIL"), os.getenv("PASSWORD")) # type: ignore

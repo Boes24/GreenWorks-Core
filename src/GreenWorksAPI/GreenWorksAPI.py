@@ -16,7 +16,7 @@ class Mower:
     properties: Mower_properties
     operating_status: Mower_operating_status
 
-class GreenWorks:
+class GreenWorksAPI:
     """Greenworks - API Wrapper for Greenworks robotic lawn mower."""
     base_url = "https://xapi.globetools.systems/v2"
 
@@ -88,8 +88,6 @@ class GreenWorks:
         except TypeError as e:
             raise RuntimeError(f"Fejl ved oprettelse af user_info_object: {e}") from e
         
-
-
     def get_mower_operating_status(self, product_id: int, mower_id: int) -> Mower_operating_status:
         """
         Placeholder for a method to update mower information.
@@ -172,7 +170,6 @@ class GreenWorks:
         except TypeError as e:
             raise RuntimeError(f"Fejl ved oprettelse af mower_info_object: {e}") from e
         
-
     def get_device_properties(self, product_id: int, device_id: int) -> Mower_properties:
         """
         Placeholder for a method to get device properties.
@@ -210,4 +207,4 @@ class LastConfig:
     def __init__(self, data):
         self.name = data.get("name", "")
         self.timestamp = data.get("timestamp")
-        self.sentio = Mower(data.get("id"),data.get("name"), data.get("sn"), data.get("is_online"), data.get("properties"), data.get("operating_status"))
+        self.mower = Mower(data.get("id"),data.get("name"), data.get("sn"), data.get("is_online"), data.get("properties"), data.get("operating_status"))
