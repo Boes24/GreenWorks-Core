@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from Enums import MowerState
+from GreenWorksAPI.Enums import MowerState
 from datetime import datetime
 @dataclass
 class Mower_properties:

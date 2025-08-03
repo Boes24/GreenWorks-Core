@@ -4,8 +4,8 @@ from zoneinfo import ZoneInfo
 from datetime import datetime
 import requests
 import json
-from Records import Login_object, Mower_operating_status, User_info_object, Mower_properties
-from Enums import MowerState
+from GreenWorksAPI.Records import Login_object, Mower_operating_status, User_info_object, Mower_properties
+from GreenWorksAPI.Enums import MowerState
 
 @dataclass
 class Mower:
@@ -15,6 +15,7 @@ class Mower:
     is_online: bool
     properties: Mower_properties
     operating_status: Mower_operating_status
+    model: str = "Greenworks Mower"  # Default model name, can be overridden
 
 class GreenWorksAPI:
     """Greenworks - API Wrapper for Greenworks robotic lawn mower."""
@@ -22,11 +23,11 @@ class GreenWorksAPI:
 
     def __init__(self, email: str, password: str, timezone: str):
         """Initialize the GreenWorks class with user credentials."""
-        self.login_info = self.login_user(email, password)
-        self.user_info = self.get_user_info(self.login_info.user_id)
+        self.login_info = self.__login_user(email, password)
+        self.user_info = self.__get_user_info(self.login_info.user_id)
         self.UserTimezone = ZoneInfo(timezone)
 
-    def login_user(self, email: str, password: str):
+    def __login_user(self, email: str, password: str):
         url = f"{self.base_url}/user_auth"
         body = {
             "corp_id": "100fa2b00b622800",
@@ -61,7 +62,7 @@ class GreenWorksAPI:
         except TypeError as e:
             raise RuntimeError(f"Login fejlede: fejl ved oprettelse af login_object: {e}\nData: {data}") from e
 
-    def get_user_info(self, user_id: int) -> User_info_object:
+    def __get_user_info(self, user_id: int) -> User_info_object:
         url = f"{self.base_url}/user/{user_id}"
         headers = {
             "Access-Token": self.login_info.access_token
@@ -88,7 +89,7 @@ class GreenWorksAPI:
         except TypeError as e:
             raise RuntimeError(f"Fejl ved oprettelse af user_info_object: {e}") from e
         
-    def get_mower_operating_status(self, product_id: int, mower_id: int) -> Mower_operating_status:
+    def __get_mower_operating_status(self, product_id: int, mower_id: int) -> Mower_operating_status:
         """
         Placeholder for a method to update mower information.
         This method should implement the logic to update mower details.
@@ -120,57 +121,8 @@ class GreenWorksAPI:
             raise RuntimeError(f"Fejl ved oprettelse af mower_info_object: {e}") from e
         except requests.exceptions.RequestException as e:
             raise RuntimeError(f"Fejl under API-kald til {url}: {e}") from e
-
-    def get_devices(self, user_id: int) -> list[Mower]:
-        Mowers = []  # Tøm listen før opdatering
-        url = f"{self.base_url}/user/{user_id}/subscribe/devices?version=0"
-        headers = {
-            "Access-Token": self.login_info.access_token
-        }
-
-        try:
-            response = requests.get(url, headers=headers, timeout=10)
-            response.raise_for_status()  # Stopper hvis status != 2xx
-
-            data = response.json()
-
-            # Tjek at 'list' findes i JSON og er en liste
-            devices = data.get("list")
-            if not isinstance(devices, list):
-                raise ValueError("JSON-svar indeholder ikke en gyldig 'list' af enheder")
-            
-            # Returner en liste af Mower objekter
-            for device in devices:
-                mower_properties = self.get_device_properties(device.get("product_id"), device.get("id"))
-                if mower_properties is None:
-                    raise ValueError(f"Kunne ikke hente egenskaber for enhed med ID {device.get('id')}")
-                mower_operating_status = self.get_mower_operating_status(device.get("product_id"), device.get("id"))
-                if mower_operating_status is None:
-                    raise ValueError(f"Kunne ikke hente tilstand for enhed med ID {device.get('id')}")
-                # Opret Mower objekt med de hentede data
-                mower = Mower(
-                    id=device.get("id"),
-                    name=device.get("name"),
-                    sn=device.get("sn"),
-                    is_online=device.get("is_online"),
-                    properties=mower_properties,
-                    operating_status=mower_operating_status
-                )
-                # Tilføj Mower objektet til listen
-                Mowers.append(mower)
-
-            return Mowers  # Returner listen af Mower objekter
-
-        except requests.exceptions.RequestException as e:
-            raise RuntimeError(f"Fejl under API-kald til {url}: {e}") from e
-
-        except ValueError as e:
-            raise RuntimeError(f"Ugyldigt JSON-svar fra {url}: {e}") from e
-
-        except TypeError as e:
-            raise RuntimeError(f"Fejl ved oprettelse af mower_info_object: {e}") from e
-        
-    def get_device_properties(self, product_id: int, device_id: int) -> Mower_properties:
+    
+    def __get_device_properties(self, product_id: int, device_id: int) -> Mower_properties:
         """
         Placeholder for a method to get device properties.
         This method should implement the logic to retrieve device properties.
@@ -200,11 +152,69 @@ class GreenWorksAPI:
         
         pass
 
+    def get_devices(self, user_id: int) -> list[Mower]:
+        Mowers = []  # Tøm listen før opdatering
+        url = f"{self.base_url}/user/{user_id}/subscribe/devices?version=0"
+        headers = {
+            "Access-Token": self.login_info.access_token
+        }
+        try:
+            response = requests.get(url, headers=headers, timeout=10)
+            response.raise_for_status()  # Stopper hvis status != 2xx
+
+            data = response.json()
+
+            # Tjek at 'list' findes i JSON og er en liste
+            devices = data.get("list")
+            if not isinstance(devices, list):
+                raise ValueError("JSON-svar indeholder ikke en gyldig 'list' af enheder")
+            
+            # Returner en liste af Mower objekter
+            for device in devices:
+                mower_properties = self.__get_device_properties(device.get("product_id"), device.get("id"))
+                if mower_properties is None:
+                    raise ValueError(f"Kunne ikke hente egenskaber for enhed med ID {device.get('id')}")
+                mower_operating_status = self.__get_mower_operating_status(device.get("product_id"), device.get("id"))
+                if mower_operating_status is None:
+                    raise ValueError(f"Kunne ikke hente tilstand for enhed med ID {device.get('id')}")
+                # Opret Mower objekt med de hentede data
+                mower = Mower(
+                    id=device.get("id"),
+                    name=device.get("name"),
+                    sn=device.get("sn"),
+                    is_online=device.get("is_online"),
+                    properties=mower_properties,
+                    operating_status=mower_operating_status
+                )
+                # Tilføj Mower objektet til listen
+                Mowers.append(mower)
+
+            return Mowers  # Returner listen af Mower objekter
+
+        except requests.exceptions.RequestException as e:
+            raise RuntimeError(f"Fejl under API-kald til {url}: {e}") from e
+
+        except ValueError as e:
+            raise RuntimeError(f"Ugyldigt JSON-svar fra {url}: {e}") from e
+
+        except TypeError as e:
+            raise RuntimeError(f"Fejl ved oprettelse af mower_info_object: {e}") from e
+        
+    def pause_mower(self, mower_id: int, duration: int = 0):
+        """
+        Placeholder for a method to pause the mower.
+        This method should implement the logic to pause the mower.
+        """
+        # Implement logic to pause the mower
+        pass
+
+    def unpause_mower(self, mower_id: int):
+        """
+        Placeholder for a method to unpause the mower.
+        This method should implement the logic to unpause the mower.
+        """
+        # Implement logic to unpause the mower
+        pass
+
 class UnauthorizedException(Exception):
     pass
-
-class LastConfig:
-    def __init__(self, data):
-        self.name = data.get("name", "")
-        self.timestamp = data.get("timestamp")
-        self.mower = Mower(data.get("id"),data.get("name"), data.get("sn"), data.get("is_online"), data.get("properties"), data.get("operating_status"))
