@@ -23,11 +23,11 @@ class GreenWorksAPI:
 
     def __init__(self, email: str, password: str, timezone: str):
         """Initialize the GreenWorks class with user credentials."""
-        self.login_info = self.__login_user(email, password)
-        self.user_info = self.__get_user_info(self.login_info.user_id)
+        self.login_info = self._login_user(email, password)
+        self.user_info = self._get_user_info(self.login_info.user_id)
         self.UserTimezone = ZoneInfo(timezone)
 
-    def __login_user(self, email: str, password: str):
+    def _login_user(self, email: str, password: str):
         url = f"{self.base_url}/user_auth"
         body = {
             "corp_id": "100fa2b00b622800",
@@ -62,7 +62,7 @@ class GreenWorksAPI:
         except TypeError as e:
             raise RuntimeError(f"Login fejlede: fejl ved oprettelse af login_object: {e}\nData: {data}") from e
 
-    def __get_user_info(self, user_id: int) -> User_info_object:
+    def _get_user_info(self, user_id: int) -> User_info_object:
         url = f"{self.base_url}/user/{user_id}"
         headers = {
             "Access-Token": self.login_info.access_token
@@ -89,11 +89,7 @@ class GreenWorksAPI:
         except TypeError as e:
             raise RuntimeError(f"Fejl ved oprettelse af user_info_object: {e}") from e
         
-    def __get_mower_operating_status(self, product_id: int, mower_id: int) -> Mower_operating_status:
-        """
-        Placeholder for a method to update mower information.
-        This method should implement the logic to update mower details.
-        """
+    def _get_mower_operating_status(self, product_id: int, mower_id: int) -> Mower_operating_status:
         url = f"https://xapi.globetools.systems/v2/product/{product_id}/v_device/{mower_id}?datapoints=32"
         headers = {
             "Access-Token": self.login_info.access_token
@@ -122,7 +118,7 @@ class GreenWorksAPI:
         except requests.exceptions.RequestException as e:
             raise RuntimeError(f"Fejl under API-kald til {url}: {e}") from e
     
-    def __get_device_properties(self, product_id: int, device_id: int) -> Mower_properties:
+    def _get_device_properties(self, product_id: int, device_id: int) -> Mower_properties:
         """
         Placeholder for a method to get device properties.
         This method should implement the logic to retrieve device properties.
@@ -171,10 +167,10 @@ class GreenWorksAPI:
             
             # Returner en liste af Mower objekter
             for device in devices:
-                mower_properties = self.__get_device_properties(device.get("product_id"), device.get("id"))
+                mower_properties = self._get_device_properties(device.get("product_id"), device.get("id"))
                 if mower_properties is None:
                     raise ValueError(f"Kunne ikke hente egenskaber for enhed med ID {device.get('id')}")
-                mower_operating_status = self.__get_mower_operating_status(device.get("product_id"), device.get("id"))
+                mower_operating_status = self._get_mower_operating_status(device.get("product_id"), device.get("id"))
                 if mower_operating_status is None:
                     raise ValueError(f"Kunne ikke hente tilstand for enhed med ID {device.get('id')}")
                 # Opret Mower objekt med de hentede data
