@@ -4,8 +4,8 @@ from zoneinfo import ZoneInfo
 from datetime import datetime
 import requests
 import json
-from Records import Login_object, Mower_operating_status, User_info_object, Mower_properties
-from Enums import MowerState
+from .Records import Login_object, Mower_operating_status, User_info_object, Mower_properties
+from .Enums import MowerState
 
 @dataclass
 class Mower:
