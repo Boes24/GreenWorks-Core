@@ -26,7 +26,7 @@ class GreenWorksAPI:
     def __init__(self, email: str, password: str, timezone: str):
         """Initialize the GreenWorks class with user credentials."""
         self.login_info = self._login_user(email, password)
-        self.user_info = self._get_user_info(self.login_info.user_id)
+        self.user_info = self._get_user_info()
         self.UserTimezone = ZoneInfo(timezone)
 
     def _login_user(self, email: str, password: str):
@@ -64,8 +64,8 @@ class GreenWorksAPI:
         except TypeError as e:
             raise RuntimeError(f"Login fejlede: fejl ved oprettelse af login_object: {e}\nData: {data}") from e
 
-    def _get_user_info(self, user_id: int) -> User_info_object:
-        url = f"{self.base_url}/user/{user_id}"
+    def _get_user_info(self) -> User_info_object:
+        url = f"{self.base_url}/user/{self.login_info.user_id}"
         headers = {
             "Access-Token": self.login_info.access_token
         }
@@ -140,7 +140,7 @@ class GreenWorksAPI:
         except requests.exceptions.RequestException as e:
             raise RuntimeError(f"Fejl under API-kald til {url}: {e}") from e
 
-    def refresh_access_token(self, access_token: str, refresh_token: str):
+    def refresh_access_token(self):
         """
         Placeholder for a method to refresh the access token.
         This method should implement the logic to refresh the token if needed.
@@ -150,9 +150,9 @@ class GreenWorksAPI:
         
         pass
 
-    def get_devices(self, user_id: int) -> list[Mower]:
+    def get_devices(self) -> list[Mower]:
         Mowers: list[Mower] = []
-        url = f"{self.base_url}/user/{user_id}/subscribe/devices?version=0"
+        url = f"{self.base_url}/user/{self.login_info.user_id}/subscribe/devices?version=0"
         headers = {
             "Access-Token": self.login_info.access_token
         }
