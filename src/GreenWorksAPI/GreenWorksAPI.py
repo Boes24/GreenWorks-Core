@@ -7,6 +7,8 @@ import json
 from .Records import Login_object, Mower_operating_status, User_info_object, Mower_properties
 from .Enums import MowerState
 
+
+
 @dataclass
 class Mower:
     id: int
@@ -149,7 +151,7 @@ class GreenWorksAPI:
         pass
 
     def get_devices(self, user_id: int) -> list[Mower]:
-        Mowers = []  # Tøm listen før opdatering
+        Mowers: list[Mower] = []
         url = f"{self.base_url}/user/{user_id}/subscribe/devices?version=0"
         headers = {
             "Access-Token": self.login_info.access_token
@@ -188,7 +190,7 @@ class GreenWorksAPI:
             return Mowers  # Returner listen af Mower objekter
 
         except requests.exceptions.RequestException as e:
-            raise RuntimeError(f"Fejl under API-kald til {url}: {e}") from e
+            raise RuntimeError(f"Fejl under API-kald til {url}: {e}, {response.text}, {response.status_code}, {response.headers}, {e.args}") from e
 
         except ValueError as e:
             raise RuntimeError(f"Ugyldigt JSON-svar fra {url}: {e}") from e

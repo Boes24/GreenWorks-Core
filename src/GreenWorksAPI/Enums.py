@@ -1,7 +1,8 @@
 from enum import Enum
 
 class MowerState(Enum):
-    Parked_by_user = 2
+    STOP_BUTTON_PRESSED = 1
+    PARKED_BY_USER = 2
     PAUSED = 3
     MOWING = 4
     LEAVING_CHARGING_STATION = 5
