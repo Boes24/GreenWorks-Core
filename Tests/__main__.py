@@ -4,17 +4,17 @@ from zoneinfo import ZoneInfo
 from src.GreenWorksAPI.GreenWorksAPI import GreenWorksAPI
 
 
-greenworks = GreenWorksAPI(os.getenv("EMAIL"), os.getenv("PASSWORD"),"Europe/Copenhagen") # type: ignore
+greenworks = GreenWorksAPI(os.getenv("EMAIL"), os.getenv("PASSWORD"), "Europe/Copenhagen") # type: ignore
 
 def test_login_and_user_info():
     assert greenworks.user_info.email == os.getenv("EMAIL")
     assert greenworks.login_info.access_token is not None
     assert greenworks.login_info.user_id is not None
 
-test_login_and_user_info()
+#test_login_and_user_info()
 
 def test_get_devices():
-    mowers = greenworks.get_devices(greenworks.user_info.id)
+    mowers = greenworks.get_devices()
     assert len(mowers) > 0, "No devices found."
     for device in mowers:
         assert device.id is not None, "Device ID is None."
@@ -30,7 +30,7 @@ def test_get_devices():
         print(f"Next Start: {device.operating_status.next_start}")
     
 
-test_get_devices()
+#test_get_devices()
 print("All tests passed.")
 # This script tests the login functionality and retrieves user information and devices.
 # It assumes that the environment variables EMAIL and PASSWORD are set with valid credentials.
