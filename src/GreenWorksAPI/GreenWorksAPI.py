@@ -141,14 +141,22 @@ class GreenWorksAPI:
             raise RuntimeError(f"Fejl under API-kald til {url}: {e}") from e
 
     def refresh_access_token(self):
-        """
-        Placeholder for a method to refresh the access token.
-        This method should implement the logic to refresh the token if needed.
-        """
-        # Implement token refresh logic here
-        
-        
-        pass
+        url = f"{self.base_url}/user/token/refresh"
+        body = {
+            "refresh_token": self.login_info.refresh_token,
+        }
+        headers = {
+            "Access-Token": self.login_info.access_token
+        }
+        try:
+            response = requests.post(url, json=body, headers=headers, timeout=10)
+            response.raise_for_status()  # Stopper ved 4xx/5xx
+            data = response.json()
+            self.login_info.access_token = data.get("access_token")
+            self.login_info.refresh_token = data.get("refresh_token")
+
+        except requests.exceptions.RequestException as e:
+            raise RuntimeError(f"Fejl under API-kald til {url}: {e}") from e
 
     def get_devices(self) -> list[Mower]:
         Mowers: list[Mower] = []
