@@ -100,28 +100,6 @@ class GreenWorksAPI:
         except requests.exceptions.RequestException as e:
             raise RuntimeError(f"Fejl under API-kald til {self.base_url}{endpoint}: {e}") from e
 
-    def refresh_access_token(self):
-        print(f"Refreshing access token")
-        url = f"{self.base_url}user/token/refresh"
-        body = {
-            "refresh_token": self.login_info.refresh_token,
-        }
-        headers = {
-            "Access-Token": self.login_info.access_token
-        }
-        try:
-            response = requests.post(url, json=body, headers=headers, timeout=10)
-            response.raise_for_status()  
-            data = response.json()
-            self.login_info.access_token = data.get("access_token")
-            self.login_info.refresh_token = data.get("refresh_token")
-            self.login_info.expire_in = int(time.time() + 3500)
-
-        except requests.exceptions.RequestException as e:
-            print(f"An error occurred while refreshing access token: {e}")
-            self._login_user(self.user_info.email, self.user_password)  # Re-login if refresh fails
-            raise RuntimeError(f"Fejl under API-kald til {url}: {e}") from e
-
     def get_devices(self) -> list[Mower]:
         Mowers: list[Mower] = []
         try:
@@ -202,12 +180,12 @@ class GreenWorksAPI:
         try:
             url = f"{self.base_url}{endpoint}"
             header = {'Content-Type':'application/json', "Access-Token": self.login_info.access_token}
-            #print(f"Request URL: {url}")  # Debugging output
+            print(f"Request URL: {url}")  # Debugging output
             #print(f"Request Headers: {header}")  # Debugging output
             
             
             response = requests.get(url,json=body, headers=header,params=params,timeout=10)
-            #print(f"Response: {response.json()}")  # Debugging output
+            print(f"Response: {response.json()}")  # Debugging output
 
             response.raise_for_status()  # Kaster exception på 4xx/5xx
             return response
@@ -221,8 +199,27 @@ class GreenWorksAPI:
         except TypeError as e:
             raise RuntimeError(f"Fejl ved oprettelse af mower_info_object: {e}") from e
         
+    def refresh_access_token(self):
+        print(f"Refreshing access token")
+        url = f"{self.base_url}user/token/refresh"
+        body = {
+            "refresh_token": self.login_info.refresh_token,
+        }
+        headers = {
+            "Access-Token": self.login_info.access_token
+        }
+        try:
+            response = requests.post(url, json=body, headers=headers, timeout=10)
+            if response.status_code != 200:
+                self._login_user(self.user_info.email, self.user_password)  # Re-login if refresh fails
+                return
+            data = response.json()
+            self.login_info.access_token = data.get("access_token")
+            self.login_info.refresh_token = data.get("refresh_token")
+            self.login_info.expire_in = int(time.time() + 3500)
 
-
+        except requests.exceptions.RequestException as e:
+            raise RuntimeError(f"Fejl under API-kald til {url}: {e}") from e
 
         
 
