@@ -11,7 +11,7 @@ def test_login_and_user_info():
     assert greenworks.login_info.access_token is not None
     assert greenworks.login_info.user_id is not None
 
-#test_login_and_user_info()
+test_login_and_user_info()
 
 def test_get_devices():
     mowers = greenworks.get_devices()
@@ -30,7 +30,7 @@ def test_get_devices():
         print(f"Next Start: {device.operating_status.next_start}")
     
 
-#test_get_devices()
+test_get_devices()
 print("All tests passed.")
 # This script tests the login functionality and retrieves user information and devices.
 # It assumes that the environment variables EMAIL and PASSWORD are set with valid credentials.

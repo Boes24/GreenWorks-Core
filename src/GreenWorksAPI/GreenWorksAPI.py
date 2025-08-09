@@ -2,6 +2,7 @@
 from dataclasses import dataclass
 from zoneinfo import ZoneInfo
 from datetime import datetime
+import time
 import requests
 import json
 from .Records import Login_object, Mower_operating_status, User_info_object, Mower_properties
@@ -21,7 +22,7 @@ class Mower:
 
 class GreenWorksAPI:
     """Greenworks - API Wrapper for Greenworks robotic lawn mower."""
-    base_url = "https://xapi.globetools.systems/v2"
+    base_url = "https://xapi.globetools.systems/v2/"
 
     def __init__(self, email: str, password: str, timezone: str):
         """Initialize the GreenWorks class with user credentials."""
@@ -30,74 +31,43 @@ class GreenWorksAPI:
         self.UserTimezone = ZoneInfo(timezone)
 
     def _login_user(self, email: str, password: str):
-        url = f"{self.base_url}/user_auth"
-        body = {
-            "corp_id": "100fa2b00b622800",
-            "email": email,
-            "password": password,
-        }
-
         try:
             print(f"Logging in with email: {email}")  # Debugging output
-            print(f"Request URL: {url}")  # Debugging output
-            print(f"Request body: {body}")  # Debugging output
             # Send POST request to the API
+            url = f"{self.base_url}user_auth"
+            body = {
+                "corp_id": "100fa2b00b622800",
+                "email": email,
+                "password": password,
+            }
             response = requests.post(url, json=body, timeout=10)
-            
-            if response.status_code == 401:
-                raise UnauthorizedException('Wrong login')
-            response.raise_for_status()  # Stopper ved 4xx/5xx
             data = response.json()
+
+            data["expire_in"] = time.time() + data["expire_in"] - 300  # Set expiration time for access token
 
             # Eventuelt check for nødvendige felter
             if "user_id" not in data or "access_token" not in data:
                 raise ValueError("Login-svar mangler nødvendige felter: 'user_id' og/eller 'access_token'")
 
             return Login_object(**data)
-
-        except requests.exceptions.RequestException as e:
-            raise RuntimeError(f"Login fejlede: netværksfejl ved {url}: {e} : {response.json()}") from e
-
-        except ValueError as e:
-            raise RuntimeError(f"Login fejlede: ugyldigt JSON-svar fra {url}: {e}") from e
-
-        except TypeError as e:
-            raise RuntimeError(f"Login fejlede: fejl ved oprettelse af login_object: {e}\nData: {data}") from e
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            raise RuntimeError(f"Fejl ved login: {e}") from e
 
     def _get_user_info(self) -> User_info_object:
-        url = f"{self.base_url}/user/{self.login_info.user_id}"
-        headers = {
-            "Access-Token": self.login_info.access_token
-        }
-
         try:
-            response = requests.get(url, headers=headers, timeout=10)
-            response.raise_for_status()  # Kaster exception på 4xx/5xx
-
+            response = self.__request(f"user/{self.login_info.user_id}")
             data = response.json()
-            
-            # Simpelt check for nødvendige felter (kan udvides)
-            if "id" not in data:
-                raise ValueError("Brugerdata mangler 'id' felt")
 
             return User_info_object(**data)
 
-        except requests.exceptions.RequestException as e:
-            raise RuntimeError(f"Fejl under API-kald til {url}: {e}") from e
+        except Exception as e:
+            raise RuntimeError(f"Fejl") from e
 
-        except ValueError as e:
-            raise RuntimeError(f"Ugyldigt JSON-svar: {e}") from e
-
-        except TypeError as e:
-            raise RuntimeError(f"Fejl ved oprettelse af user_info_object: {e}") from e
-        
     def _get_mower_operating_status(self, product_id: int, mower_id: int) -> Mower_operating_status:
-        url = f"https://xapi.globetools.systems/v2/product/{product_id}/v_device/{mower_id}?datapoints=32"
-        headers = {
-            "Access-Token": self.login_info.access_token
-        }
         try:
-            response = requests.get(url, headers=headers, timeout=10)
+            endpoint = f"product/{product_id}/v_device/{mower_id}"
+            response = self.__request(endpoint, params={"datapoints": "32"})
             response.raise_for_status()  # Stopper ved 4xx/5xx
 
 
@@ -112,36 +82,26 @@ class GreenWorksAPI:
                 next_start=datetime.fromtimestamp(data.get("next_start", ""), tz=self.UserTimezone),
                 request_time=datetime.fromisoformat(data.get("request_time", "").replace("Z", "+00:00")).astimezone(self.UserTimezone)
             )
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            raise RuntimeError(f"Fejl ved hentning af plæneklipperens driftsstatus: {e}") from e
 
-        except ValueError as e:
-            raise RuntimeError(f"Ugyldigt JSON-svar fra {url}: {e}") from e
-        except TypeError as e:
-            raise RuntimeError(f"Fejl ved oprettelse af mower_info_object: {e}") from e
-        except requests.exceptions.RequestException as e:
-            raise RuntimeError(f"Fejl under API-kald til {url}: {e}") from e
-    
     def _get_device_properties(self, product_id: int, device_id: int) -> Mower_properties:
-        """
-        Placeholder for a method to get device properties.
-        This method should implement the logic to retrieve device properties.
-        """
-        url = f"{self.base_url}/product/{product_id}/device/{device_id}/property"
-        headers = {
-            "Access-Token": self.login_info.access_token
-        }
+        endpoint = f"product/{product_id}/device/{device_id}/property"
 
         try:
-            response = requests.get(url, headers=headers, timeout=10)
-            response.raise_for_status()  # Stopper ved 4xx/5xx
+            response = self.__request(endpoint)
+            response.raise_for_status()  
             
             data = response.json()
-            return Mower_properties(**data)  # Returner de hentede enhedsegenskaber
+            return Mower_properties(**data) 
 
         except requests.exceptions.RequestException as e:
-            raise RuntimeError(f"Fejl under API-kald til {url}: {e}") from e
+            raise RuntimeError(f"Fejl under API-kald til {self.base_url}{endpoint}: {e}") from e
 
     def refresh_access_token(self):
-        url = f"{self.base_url}/user/token/refresh"
+        print(f"Refreshing access token")
+        url = f"{self.base_url}user/token/refresh"
         body = {
             "refresh_token": self.login_info.refresh_token,
         }
@@ -150,22 +110,20 @@ class GreenWorksAPI:
         }
         try:
             response = requests.post(url, json=body, headers=headers, timeout=10)
-            response.raise_for_status()  # Stopper ved 4xx/5xx
+            response.raise_for_status()  
             data = response.json()
             self.login_info.access_token = data.get("access_token")
             self.login_info.refresh_token = data.get("refresh_token")
+            self.login_info.expire_in = int(time.time() + 3500)
 
         except requests.exceptions.RequestException as e:
             raise RuntimeError(f"Fejl under API-kald til {url}: {e}") from e
 
     def get_devices(self) -> list[Mower]:
         Mowers: list[Mower] = []
-        url = f"{self.base_url}/user/{self.login_info.user_id}/subscribe/devices?version=0"
-        headers = {
-            "Access-Token": self.login_info.access_token
-        }
         try:
-            response = requests.get(url, headers=headers, timeout=10)
+            endpoint = f"user/{self.login_info.user_id}/subscribe/devices?version=0"
+            response = self.__request(endpoint)
             response.raise_for_status()  # Stopper hvis status != 2xx
 
             data = response.json()
@@ -196,16 +154,11 @@ class GreenWorksAPI:
                 Mowers.append(mower)
 
             return Mowers  # Returner listen af Mower objekter
-
-        except requests.exceptions.RequestException as e:
-            raise RuntimeError(f"Fejl under API-kald til {url}: {e}, {response.text}, {response.status_code}, {response.headers}, {e.args}") from e
-
-        except ValueError as e:
-            raise RuntimeError(f"Ugyldigt JSON-svar fra {url}: {e}") from e
-
-        except TypeError as e:
-            raise RuntimeError(f"Fejl ved oprettelse af mower_info_object: {e}") from e
         
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            return []
+
     def pause_mower(self, mower_id: int, duration: int = 0):
         """
         Placeholder for a method to pause the mower.
@@ -221,6 +174,54 @@ class GreenWorksAPI:
         """
         # Implement logic to unpause the mower
         pass
+
+    def dock_mower(self, mower_id: int):
+
+        """
+        Placeholder for a method to dock the mower.
+        This method should implement the logic to dock the mower.
+        """
+        # Implement logic to dock the mower
+        pass
+
+    def cancel_docking(self, mower_id: int):
+        """
+        Placeholder for a method to cancel docking of the mower.
+        This method should implement the logic to cancel docking of the mower.
+        """
+        # Implement logic to cancel docking of the mower
+        pass
+
+    # private method for requesting data from api
+    def __request(self, endpoint:str, params={}, body={}):
+        if time.time() > self.login_info.expire_in:
+            self.refresh_access_token()
+        try:
+            url = f"{self.base_url}{endpoint}"
+            header = {'Content-Type':'application/json', "Access-Token": self.login_info.access_token}
+            #print(f"Request URL: {url}")  # Debugging output
+            #print(f"Request Headers: {header}")  # Debugging output
+            
+            
+            response = requests.get(url,json=body, headers=header,params=params,timeout=10)
+            #print(f"Response: {response.json()}")  # Debugging output
+
+            response.raise_for_status()  # Kaster exception på 4xx/5xx
+            return response
+    
+        except requests.exceptions.RequestException as e:
+            raise RuntimeError(f"Fejl under API-kald til {self.base_url}{endpoint}: {e}, {response.text}, {response.status_code}, {response.headers}, {e.args}") from e
+
+        except ValueError as e:
+            raise RuntimeError(f"Ugyldigt JSON-svar fra {self.base_url}{endpoint}: {e}") from e
+
+        except TypeError as e:
+            raise RuntimeError(f"Fejl ved oprettelse af mower_info_object: {e}") from e
+        
+
+
+
+        
 
 class UnauthorizedException(Exception):
     pass
