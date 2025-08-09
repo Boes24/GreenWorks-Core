@@ -26,7 +26,8 @@ class GreenWorksAPI:
 
     def __init__(self, email: str, password: str, timezone: str):
         """Initialize the GreenWorks class with user credentials."""
-        self.login_info = self._login_user(email, password)
+        self.user_password = password
+        self.login_info = self._login_user(email, self.user_password)
         self.user_info = self._get_user_info()
         self.UserTimezone = ZoneInfo(timezone)
 
@@ -117,6 +118,8 @@ class GreenWorksAPI:
             self.login_info.expire_in = int(time.time() + 3500)
 
         except requests.exceptions.RequestException as e:
+            print(f"An error occurred while refreshing access token: {e}")
+            self._login_user(self.user_info.email, self.user_password)  # Re-login if refresh fails
             raise RuntimeError(f"Fejl under API-kald til {url}: {e}") from e
 
     def get_devices(self) -> list[Mower]:
