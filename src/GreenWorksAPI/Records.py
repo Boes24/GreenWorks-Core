@@ -7,7 +7,7 @@ class Mower_properties:
     is_rain_sensor_on: bool
     geofence_latitude: float
     geofence_longitude: float
-    device_blade_usage_time: str
+    device_blade_usage_time: int
     device_type_no: str
 
 @dataclass
