@@ -5,9 +5,12 @@ from datetime import datetime
 import time
 import requests
 import json
+import logging
 from .Records import Login_object, Mower_operating_status, User_info_object, Mower_properties
 from .Enums import MowerState
 
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -27,13 +30,15 @@ class GreenWorksAPI:
     def __init__(self, email: str, password: str, timezone: str):
         """Initialize the GreenWorks class with user credentials."""
         self.user_password = password
+        logger.info("Initializing GreenWorksAPI client")
         self.login_info = self._login_user(email, self.user_password)
         self.user_info = self._get_user_info()
         self.UserTimezone = ZoneInfo(timezone)
+        logger.debug("Timezone set to %s", timezone)
 
     def _login_user(self, email: str, password: str):
         try:
-            print(f"Logging in with email: {email}")  # Debugging output
+            logger.info("Attempting login for %s", email)
             # Send POST request to the API
             url = f"{self.base_url}user_auth"
             body = {
@@ -42,6 +47,7 @@ class GreenWorksAPI:
                 "password": password,
             }
             response = requests.post(url, json=body, timeout=10)
+            logger.info("Login response status=%s", response.status_code)
             data = response.json()
 
             data["expire_in"] = time.time() + data["expire_in"] - 300  # Set expiration time for access token
@@ -50,23 +56,32 @@ class GreenWorksAPI:
             if "user_id" not in data or "access_token" not in data:
                 raise ValueError("Login-svar mangler nødvendige felter: 'user_id' og/eller 'access_token'")
 
+            logger.info("Login successful for user_id=%s", data.get("user_id"))
             return Login_object(**data)
         except Exception as e:
-            print(f"An error occurred: {e}")
+            logger.exception("Login failed: %s", e)
             raise RuntimeError(f"Fejl ved login: {e}") from e
 
     def _get_user_info(self) -> User_info_object:
         try:
             response = self.__request(f"user/{self.login_info.user_id}")
-            data = response.json()
+            try:
+                payload = response.json()
+            except ValueError:
+                payload = {}
+
+            logger.info("Fetched user info for user_id=%s; keys=%s", self.login_info.user_id, list(payload.keys()))
+            data = payload
 
             return User_info_object(**data)
 
         except Exception as e:
+            logger.exception("Failed fetching user info: %s", e)
             raise RuntimeError(f"Fejl") from e
 
     def _get_mower_operating_status(self, product_id: int, mower_id: int) -> Mower_operating_status:
         try:
+            logger.info("Requesting mower operating status (product_id=%s, mower_id=%s)", product_id, mower_id)
             endpoint = f"product/{product_id}/v_device/{mower_id}"
             response = self.__request(endpoint, params={"datapoints": "32"})
             response.raise_for_status()  # Stopper ved 4xx/5xx
@@ -77,32 +92,44 @@ class GreenWorksAPI:
             parsed_32 = json.loads(raw_32)
             data = parsed_32.get("request", {})
 
-            return Mower_operating_status(
+            status = Mower_operating_status(
                 battery_status=data.get("battery_status", -1),
                 mower_main_state=MowerState(data.get("mower_main_state", -1)),
                 next_start=datetime.fromtimestamp(data.get("next_start", ""), tz=self.UserTimezone),
                 request_time=datetime.fromisoformat(data.get("request_time", "").replace("Z", "+00:00")).astimezone(self.UserTimezone)
             )
+            logger.info(
+                "Operating status (mower_id=%s): battery=%s state=%s next_start=%s",
+                mower_id,
+                status.battery_status,
+                getattr(status.mower_main_state, "name", status.mower_main_state),
+                status.next_start,
+            )
+            return status
         except Exception as e:
-            print(f"An error occurred: {e}")
+            logger.exception("Error getting mower operating status (product_id=%s, mower_id=%s): %s", product_id, mower_id, e)
             raise RuntimeError(f"Fejl ved hentning af plæneklipperens driftsstatus: {e}") from e
 
     def _get_device_properties(self, product_id: int, device_id: int) -> Mower_properties:
         endpoint = f"product/{product_id}/device/{device_id}/property"
 
         try:
+            logger.info("Requesting device properties (product_id=%s, device_id=%s)", product_id, device_id)
             response = self.__request(endpoint)
             response.raise_for_status()  
             
             data = response.json()
+            logger.debug("Device properties retrieved (device_id=%s); keys=%s", device_id, list(data.keys()))
             return Mower_properties(**data) 
 
         except requests.exceptions.RequestException as e:
+            logger.exception("API error when fetching device properties: %s", e)
             raise RuntimeError(f"Fejl under API-kald til {self.base_url}{endpoint}: {e}") from e
 
     def get_devices(self) -> list[Mower]:
         Mowers: list[Mower] = []
         try:
+            logger.info("Fetching devices for user_id=%s", self.login_info.user_id)
             endpoint = f"user/{self.login_info.user_id}/subscribe/devices?version=0"
             response = self.__request(endpoint)
             response.raise_for_status()  # Stopper hvis status != 2xx
@@ -133,11 +160,17 @@ class GreenWorksAPI:
                 )
                 # Tilføj Mower objektet til listen
                 Mowers.append(mower)
-
+                logger.info(
+                    "Device loaded id=%s name=%s sn=%s online=%s",
+                    mower.id,
+                    mower.name,
+                    mower.sn,
+                    mower.is_online,
+                )
             return Mowers  # Returner listen af Mower objekter
         
         except Exception as e:
-            print(f"An error occurred: {e}")
+            logger.exception("Failed to fetch devices: %s", e)
             return []
 
     def pause_mower(self, mower_id: int, duration: int = 0):
@@ -180,14 +213,13 @@ class GreenWorksAPI:
         try:
             url = f"{self.base_url}{endpoint}"
             header = {'Content-Type':'application/json', "Access-Token": self.login_info.access_token}
-            print(f"Request URL: {url}")  # Debugging output
-            #print(f"Request Headers: {header}")  # Debugging output
+            logger.info("GET %s params=%s", url, params)
             
             
             response = requests.get(url,json=body, headers=header,params=params,timeout=10)
-            print(f"Response from request (json): {response.json()}")  # Debugging output
+            logger.info("Response status=%s for %s", response.status_code, url)
             if response.status_code == 403 and response.json().get("error", {}).get("code") == 4031022:
-                print(f"Access token not working, re-logging in and send new request")
+                logger.warning("Access token rejected (4031022). Re-logging and retrying request: %s", endpoint)
                 self._login_user(self.user_info.email, self.user_password)
                 response = self.__request(endpoint, params, body)
 
@@ -196,10 +228,15 @@ class GreenWorksAPI:
             return response
     
         except requests.exceptions.RequestException as e:
-            raise RuntimeError(f"Fejl under API-kald til {self.base_url}{endpoint}: {e}, {response.text}, {response.status_code}, {response.headers}, {e.args}") from e
+            # More context for troubleshooting
+            resp = getattr(e, "response", None)
+            status = getattr(resp, "status_code", "n/a")
+            body_preview = (getattr(resp, "text", "") or "")[:500]
+            logger.exception("Request failed endpoint=%s status=%s body=%s error=%s", endpoint, status, body_preview, e)
+            raise RuntimeError(f"Fejl under API-kald til {self.base_url}{endpoint}: status={status} error={e}") from e
         
     def refresh_access_token(self):
-        print(f"Refreshing access token")
+        logger.info("Refreshing access token")
         url = f"{self.base_url}user/token/refresh"
         body = {
             "refresh_token": self.login_info.refresh_token,
@@ -209,27 +246,32 @@ class GreenWorksAPI:
         }
         try:
             response = requests.post(url, json=body, headers=headers, timeout=10)
-            print(f"Response: {response.json()}")  # Debugging output
-            print(f"Response Status Code: {response.status_code}")  # Debugging output
+            logger.info("Token refresh response status=%s", response.status_code)
             if response.status_code != 200:
-                print(f"Failed to refresh access token: {response.status_code}, {response.text}")
+                logger.warning("Failed to refresh access token: status=%s body=%s", response.status_code, response.text)
                 self._login_user(self.user_info.email, self.user_password)  # Re-login if refresh fails
+                logger.info("Performed re-login after refresh failure")
                 return
             data = response.json()
             self.login_info.access_token = data.get("access_token")
             self.login_info.refresh_token = data.get("refresh_token")
             self.login_info.expire_in = int(time.time() + 3500)
+            logger.info("Access token refreshed successfully")
 
         except requests.exceptions.RequestException as e:
+            logger.exception("HTTP error during token refresh: %s", e)
             raise RuntimeError(f"Fejl under API-kald til {url}: {e}") from e
 
         except ValueError as e:
+            logger.exception("Invalid JSON during token refresh: %s", e)
             raise RuntimeError(f"Ugyldigt JSON-svar fra {url}: {e}") from e
 
         except TypeError as e:
+            logger.exception("Type error during token refresh: %s", e)
             raise RuntimeError(f"Fejl ved oprettelse af mower_info_object: {e}") from e
 
         except Exception as e:
+            logger.exception("Unexpected error during token refresh: %s", e)
             raise RuntimeError(f"Uventet fejl under API-kald til {url}: {e}") from e
 
         
