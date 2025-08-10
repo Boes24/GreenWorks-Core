@@ -187,7 +187,10 @@ class GreenWorksAPI:
             response = requests.get(url,json=body, headers=header,params=params,timeout=10)
             print(f"Response from request (json): {response.json()}")  # Debugging output
             if response.status_code == 403 and response.json().get("error", {}).get("code") == 4031022:
+                print(f"Access token not working, re-logging in and send new request")
                 self._login_user(self.user_info.email, self.user_password)
+                response = self.__request(endpoint, params, body)
+
 
             response.raise_for_status()  # Kaster exception på 4xx/5xx
             return response
