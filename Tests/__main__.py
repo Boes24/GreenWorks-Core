@@ -35,114 +35,123 @@ def test_get_devices_live():
 
 def test_refresh_access_token_success():
     """Ensure refresh_access_token updates tokens on success and doesn't re-login."""
-    with mock.patch('src.GreenWorksAPI.GreenWorksAPI.GreenWorksAPI._login_user') as mock_login, \
-         mock.patch('src.GreenWorksAPI.GreenWorksAPI.GreenWorksAPI._get_user_info') as mock_user_info:
+    # Mock login (first POST) and refresh (second POST), and user info (__request)
+    with mock.patch('src.GreenWorksAPI.GreenWorksAPI.requests.post') as mock_post, \
+         mock.patch('src.GreenWorksAPI.GreenWorksAPI.GreenWorksAPI._GreenWorksAPI__request') as mock_req:
 
-        mock_login.return_value = Login_object(
-            access_token="old-access",
-            refresh_token="old-refresh",
-            user_id=123,
-            expire_in=int(time.time()) + 10,
-            authorize="RW",
-        )
+        # First POST: login
+        login_resp = mock.Mock()
+        login_resp.status_code = 200
+        login_resp.json.return_value = {
+            "access_token": "old-access",
+            "refresh_token": "old-refresh",
+            "user_id": 123,
+            "expire_in": 3600,
+            "authorize": "RW",
+        }
+        # Second POST: refresh
+        refresh_resp = mock.Mock()
+        refresh_resp.status_code = 200
+        refresh_resp.json.return_value = {
+            "access_token": "new-access",
+            "refresh_token": "new-refresh",
+        }
+        mock_post.side_effect = [login_resp, refresh_resp]
 
-        mock_user_info.return_value = User_info_object(
-            gender=0,
-            active_date="2025-01-01T00:00:00Z",
-            source=0,
-            passwd_inited=True,
-            is_vaild=True,
-            nickname="tester",
-            id=123,
-            create_date="2025-01-01T00:00:00Z",
-            email="tester@example.com",
-            region_id=0,
-            authorize_code="abcd",
-            corp_id="corp",
-            privacy_code="privacy",
-            account="tester",
-            age=30,
-            status=1,
-        )
+        # __request for user info
+        req_resp = mock.Mock()
+        req_resp.json.return_value = {
+            "gender": 0,
+            "active_date": "2025-01-01T00:00:00Z",
+            "source": 0,
+            "passwd_inited": True,
+            "is_vaild": True,
+            "nickname": "tester",
+            "id": 123,
+            "create_date": "2025-01-01T00:00:00Z",
+            "email": "tester@example.com",
+            "region_id": 0,
+            "authorize_code": "abcd",
+            "corp_id": "corp",
+            "privacy_code": "privacy",
+            "account": "tester",
+            "age": 30,
+            "status": 1,
+        }
+        mock_req.return_value = req_resp
 
         api = GreenWorksAPI("tester@example.com", "password", "Europe/Copenhagen")
-
-        # Reset call count to detect any re-login during refresh
-        mock_login.reset_mock()
-
         old_expire = api.login_info.expire_in
 
-        # Mock successful POST for refresh
-        with mock.patch('src.GreenWorksAPI.GreenWorksAPI.requests.post') as mock_post:
-            mock_resp = mock.Mock()
-            mock_resp.status_code = 200
-            mock_resp.json.return_value = {
-                "access_token": "new-access",
-                "refresh_token": "new-refresh",
-            }
-            mock_post.return_value = mock_resp
-
-            api.refresh_access_token()
+        api.refresh_access_token()
 
         assert api.login_info.access_token == "new-access"
         assert api.login_info.refresh_token == "new-refresh"
         assert api.login_info.expire_in > old_expire
-        # Ensure re-login not triggered on success
-        assert mock_login.call_count == 0
+        # Two POSTs (login + refresh), no extra login
+        assert mock_post.call_count == 2
 
 def test_refresh_access_token_refresh_fail_relogin_success():
-    """Ensure that when refresh returns non-200, the client performs a re-login successfully."""
-    with mock.patch('src.GreenWorksAPI.GreenWorksAPI.GreenWorksAPI._login_user') as mock_login, \
-         mock.patch('src.GreenWorksAPI.GreenWorksAPI.GreenWorksAPI._get_user_info') as mock_user_info:
+    """When refresh returns non-200, the client performs a re-login and updates tokens."""
+    with mock.patch('src.GreenWorksAPI.GreenWorksAPI.requests.post') as mock_post, \
+         mock.patch('src.GreenWorksAPI.GreenWorksAPI.GreenWorksAPI._GreenWorksAPI__request') as mock_req:
 
-        # Initial login during constructor
-        mock_login.return_value = Login_object(
-            access_token="old-access",
-            refresh_token="old-refresh",
-            user_id=123,
-            expire_in=int(time.time()) + 3600,
-            authorize="RW",
-        )
+        # POST sequence: initial login OK, refresh fails, re-login OK
+        login_resp1 = mock.Mock()
+        login_resp1.status_code = 200
+        login_resp1.json.return_value = {
+            "access_token": "old-access",
+            "refresh_token": "old-refresh",
+            "user_id": 123,
+            "expire_in": 3600,
+            "authorize": "RW",
+        }
+        refresh_fail = mock.Mock()
+        refresh_fail.status_code = 401
+        refresh_fail.text = "unauthorized"
+        refresh_fail.json.return_value = {"error": "unauthorized"}
+        login_resp2 = mock.Mock()
+        login_resp2.status_code = 200
+        login_resp2.json.return_value = {
+            "access_token": "relogin-access",
+            "refresh_token": "relogin-refresh",
+            "user_id": 123,
+            "expire_in": 3600,
+            "authorize": "RW",
+        }
+        mock_post.side_effect = [login_resp1, refresh_fail, login_resp2]
 
-        mock_user_info.return_value = User_info_object(
-            gender=0,
-            active_date="2025-01-01T00:00:00Z",
-            source=0,
-            passwd_inited=True,
-            is_vaild=True,
-            nickname="tester",
-            id=123,
-            create_date="2025-01-01T00:00:00Z",
-            email="tester@example.com",
-            region_id=0,
-            authorize_code="abcd",
-            corp_id="corp",
-            privacy_code="privacy",
-            account="tester",
-            age=30,
-            status=1,
-        )
+        # __request for user info
+        req_resp = mock.Mock()
+        req_resp.json.return_value = {
+            "gender": 0,
+            "active_date": "2025-01-01T00:00:00Z",
+            "source": 0,
+            "passwd_inited": True,
+            "is_vaild": True,
+            "nickname": "tester",
+            "id": 123,
+            "create_date": "2025-01-01T00:00:00Z",
+            "email": "tester@example.com",
+            "region_id": 0,
+            "authorize_code": "abcd",
+            "corp_id": "corp",
+            "privacy_code": "privacy",
+            "account": "tester",
+            "age": 30,
+            "status": 1,
+        }
+        mock_req.return_value = req_resp
 
         api = GreenWorksAPI("tester@example.com", "password", "Europe/Copenhagen")
+        # Perform refresh which will fail and trigger re-login
+        api.refresh_access_token()
 
-        # Reset login mock to capture re-login only
-        mock_login.reset_mock()
-
-        # Mock refresh endpoint to fail with non-200
-        with mock.patch('src.GreenWorksAPI.GreenWorksAPI.requests.post') as mock_post:
-            mock_resp = mock.Mock()
-            mock_resp.status_code = 401
-            mock_resp.text = "unauthorized"
-            mock_resp.json.return_value = {"error": "unauthorized"}
-            mock_post.return_value = mock_resp
-
-            api.refresh_access_token()
-
-        # Verify re-login attempted once
-        assert mock_login.call_count == 1, "Expected relogin when refresh fails"
-        # Tokens remain unchanged in current implementation (relogin result not assigned)
-        assert api.login_info.access_token == "old-access"
-        assert api.login_info.refresh_token == "old-refresh"
+        # Three POST calls: login, refresh fail, re-login
+        assert mock_post.call_count == 3
+        # Tokens updated from re-login response
+        assert api.login_info.access_token == "relogin-access"
+        assert api.login_info.refresh_token == "relogin-refresh"
 
 if __name__ == "__main__":
     # Always run the unit (mocked) test

@@ -26,13 +26,15 @@ class Mower:
 class GreenWorksAPI:
     """Greenworks - API Wrapper for Greenworks robotic lawn mower."""
     base_url = "https://xapi.globetools.systems/v2/"
+    login_info: Login_object
+    user_info: User_info_object
 
     def __init__(self, email: str, password: str, timezone: str):
         """Initialize the GreenWorks class with user credentials."""
         self.user_password = password
         logger.info("Initializing GreenWorksAPI client")
-        self.login_info = self._login_user(email, self.user_password)
-        self.user_info = self._get_user_info()
+        self._login_user(email, self.user_password)
+        self._get_user_info()
         self.UserTimezone = ZoneInfo(timezone)
         logger.debug("Timezone set to %s", timezone)
 
@@ -57,12 +59,13 @@ class GreenWorksAPI:
                 raise ValueError("Login-svar mangler nødvendige felter: 'user_id' og/eller 'access_token'")
 
             logger.info("Login successful for user_id=%s", data.get("user_id"))
-            return Login_object(**data)
+            self.login_info = Login_object(**data)
+
         except Exception as e:
             logger.exception("Login failed: %s", e)
             raise RuntimeError(f"Fejl ved login: {e}") from e
 
-    def _get_user_info(self) -> User_info_object:
+    def _get_user_info(self):
         try:
             response = self.__request(f"user/{self.login_info.user_id}")
             try:
@@ -73,7 +76,7 @@ class GreenWorksAPI:
             logger.info("Fetched user info for user_id=%s; keys=%s", self.login_info.user_id, list(payload.keys()))
             data = payload
 
-            return User_info_object(**data)
+            self.user_info = User_info_object(**data)
 
         except Exception as e:
             logger.exception("Failed fetching user info: %s", e)
@@ -213,11 +216,11 @@ class GreenWorksAPI:
         try:
             url = f"{self.base_url}{endpoint}"
             header = {'Content-Type':'application/json', "Access-Token": self.login_info.access_token}
-            logger.info("GET %s params=%s", url, params)
+            logger.debug("GET %s params=%s", url, params)
             
-            
+            logger.debug("GET %s body=%s headers=%s", url, body, header)
             response = requests.get(url,json=body, headers=header,params=params,timeout=10)
-            logger.info("Response status=%s for %s", response.status_code, url)
+            logger.debug("Response status=%s for %s", response.status_code, url)
             if response.status_code == 403 and response.json().get("error", {}).get("code") == 4031022:
                 logger.warning("Access token rejected (4031022). Re-logging and retrying request: %s", endpoint)
                 self._login_user(self.user_info.email, self.user_password)
@@ -245,6 +248,7 @@ class GreenWorksAPI:
             "Access-Token": self.login_info.access_token
         }
         try:
+            logger.debug("POST %s body=%s headers=%s", url, body, headers)
             response = requests.post(url, json=body, headers=headers, timeout=10)
             logger.info("Token refresh response status=%s", response.status_code)
             if response.status_code != 200:
