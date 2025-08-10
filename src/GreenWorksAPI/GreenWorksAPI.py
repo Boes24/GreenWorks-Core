@@ -185,19 +185,15 @@ class GreenWorksAPI:
             
             
             response = requests.get(url,json=body, headers=header,params=params,timeout=10)
-            print(f"Response: {response.json()}")  # Debugging output
+            print(f"Response from request (json): {response.json()}")  # Debugging output
+            if response.status_code == 403 and response.json().get("error", {}).get("code") == 4031022:
+                self._login_user(self.user_info.email, self.user_password)
 
             response.raise_for_status()  # Kaster exception på 4xx/5xx
             return response
     
         except requests.exceptions.RequestException as e:
             raise RuntimeError(f"Fejl under API-kald til {self.base_url}{endpoint}: {e}, {response.text}, {response.status_code}, {response.headers}, {e.args}") from e
-
-        except ValueError as e:
-            raise RuntimeError(f"Ugyldigt JSON-svar fra {self.base_url}{endpoint}: {e}") from e
-
-        except TypeError as e:
-            raise RuntimeError(f"Fejl ved oprettelse af mower_info_object: {e}") from e
         
     def refresh_access_token(self):
         print(f"Refreshing access token")
@@ -210,7 +206,10 @@ class GreenWorksAPI:
         }
         try:
             response = requests.post(url, json=body, headers=headers, timeout=10)
+            print(f"Response: {response.json()}")  # Debugging output
+            print(f"Response Status Code: {response.status_code}")  # Debugging output
             if response.status_code != 200:
+                print(f"Failed to refresh access token: {response.status_code}, {response.text}")
                 self._login_user(self.user_info.email, self.user_password)  # Re-login if refresh fails
                 return
             data = response.json()
@@ -221,7 +220,15 @@ class GreenWorksAPI:
         except requests.exceptions.RequestException as e:
             raise RuntimeError(f"Fejl under API-kald til {url}: {e}") from e
 
-        
+        except ValueError as e:
+            raise RuntimeError(f"Ugyldigt JSON-svar fra {url}: {e}") from e
 
+        except TypeError as e:
+            raise RuntimeError(f"Fejl ved oprettelse af mower_info_object: {e}") from e
+
+        except Exception as e:
+            raise RuntimeError(f"Uventet fejl under API-kald til {url}: {e}") from e
+
+        
 class UnauthorizedException(Exception):
     pass
